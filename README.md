@@ -167,7 +167,7 @@ risitas = onchebot.add_user(username="Risitas", password="ElMuchacho")
 bot = onchebot.add_bot(
     id="carabistouille",
     user=risitas,
-    scope=onchebot.scope.topic(123),
+    topic_id=123,
     modules=[Misc(admin="Prout")]
 )
 
