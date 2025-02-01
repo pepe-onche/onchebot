@@ -38,8 +38,8 @@ async def run():
 
     await init_db()
 
-    for user in g.users:
-        await user.update_or_create(
+    for i, user in enumerate(g.users):
+        g.users[i], _ = await user.update_or_create(
             defaults={"username": user.username, "password": user.password}
         )
 
