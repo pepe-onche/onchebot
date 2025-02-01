@@ -12,7 +12,6 @@ Il te faut:
 
 - Au moins 80 de QI
 - Python >= 3.11
-- [Redis](https://redis.io/downloads/)
 - Un pseudo onche assez haut niveau pour ne pas avoir de captcha
 
 ## Installation
@@ -184,19 +183,16 @@ Il peut aussi envoyer ses logs à loki.
 
 ### La fonction `onchebot.setup()`
 
-Tu auras peut-être besoin de changer des paramètres (comme le port pour se connecter à redis), dans ce cas tu peux appeler `onchebot.setup()` (idéalement tout en haut, après les imports).
+Tu auras peut-être besoin de changer des paramètres, dans ce cas tu peux appeler `onchebot.setup()` (idéalement tout en haut, après les imports).
 
 Les paramètres par défaut:
 
 ```python
 onchebot.setup(
-    redis_host: str = "localhost",
-    redis_port: int = 6379,
-    redis_username: Optional[str] = None,
-    redis_password: Optional[str] = None,
+    db_url: str = f"sqlite://db.sqlite3",
     prometheus_host: str = "localhost",
     prometheus_port: int = 9464,
-    loki_url: Optional[str] = None,
+    loki_url: str | None = None,
 )
 ```
 
@@ -210,8 +206,6 @@ L'exemple [apod.py](onchebot/examples/apod.py) contient le code pour le [topic d
 
 Onchebot est en deux parties: [producer](onchebot/producer.py) et [consumer](onchebot/consumer.py).
 
-Le _producer_ va aller chercher les messages et topics sur onche et les envoyer dans des streams redis.
+Le _producer_ va aller chercher les messages et topics sur onche et les sauvegarder dans une base de données SQLite.
 
-Le _consumer_ va lire les streams redis, et executer le comportement des bots que tu as défini.
-
-Ils sont lancés dans deux threads différents ![](https://risibank.fr/cache/medias/0/5/521/52158/thumb.png)
+Le _consumer_ va lire la base de données, et executer le comportement des bots que tu as défini.

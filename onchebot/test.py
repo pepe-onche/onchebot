@@ -2,18 +2,25 @@ import json
 from dataclasses import asdict, dataclass
 from time import time
 
-import fakeredis
 import pytest
 from pytest_mock import MockerFixture
+from tortoise import Tortoise
 
 import onchebot
 import onchebot.globals as g
 from onchebot.models import Message, Topic, User
-from onchebot.redis_client import redis
 
 topic_id = -1
 topic_title = "Titre"
 user = None
+
+
+async def init_db():
+    await Tortoise.init(
+        db_url="sqlite://:memory:",
+        modules={"models": ["onchebot.models"]},
+    )
+    await Tortoise.generate_schemas()
 
 
 @dataclass
@@ -31,10 +38,8 @@ async def add_msg(
     content: str, username: str = "Connard", answer_to: Message | None = None
 ) -> Message:
     global msg_counter
-    await redis().set_topic(
-        Topic(id=topic_id, name="hey", title=topic_title, forum_id=1)
-    )
-    msg = Message(
+    await Topic.update_or_create(id=topic_id, name="hey", title=topic_title, forum_id=1)
+    msg = await Message.create(
         id=msg_counter,
         answer_to=answer_to.id if answer_to else None,
         stickers=[],
@@ -47,11 +52,6 @@ async def add_msg(
         topic_id=topic_id,
     )
     msg_counter += 1
-    await redis().r.xadd(
-        name="onchebot:topics:" + str(topic_id) + ":messages",
-        fields={"msg": json.dumps(asdict(msg))},
-    )
-    await redis().r.sadd("onchebot:watched-topics", str(msg.topic_id))
     return msg
 
 
@@ -66,7 +66,7 @@ async def post_msg(
     _retry: int = 0,
 ):
     global msg_counter
-    msg = Message(
+    msg = await Message.create(
         id=msg_counter,
         answer_to=answer_to.id if answer_to else None,
         stickers=[],
@@ -79,10 +79,6 @@ async def post_msg(
         topic_id=topic_id,
     )
     msg_counter += 1
-    await redis().r.xadd(
-        name="onchebot:topics:" + str(topic_id) + ":messages",
-        fields={"msg": json.dumps(asdict(msg))},
-    )
     posted_msgs.append(msg)
 
 
@@ -97,13 +93,14 @@ def start():
 @pytest.fixture
 async def onchebot_setup(mocker: MockerFixture):
     global posted_msgs, bots, bot_types, user
+    await init_db()
     posted_msgs = []
     g.bots = []
-    mocker.patch("redis.asyncio.Redis", fakeredis.aioredis.FakeRedis)
-    mocker.patch("onchebot.redis_client.aioredis.Redis", fakeredis.aioredis.FakeRedis)
     mocker.patch("onchebot.bot.Bot.post_message", side_effect=post_msg)
     mocker.patch("onchebot.onche.Onche.get_user", side_effect=get_user)
     mocker.patch("onchebot.onche.Onche.login", side_effect=login)
     mocker.patch("onchebot.start", side_effect=start)
     onchebot.setup()
     user = onchebot.add_user(username="Bot", password="caca")
+    yield None
+    await Tortoise.close_connections()

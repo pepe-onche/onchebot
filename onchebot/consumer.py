@@ -1,21 +1,22 @@
 import asyncio
-import json
 import logging
 import threading
 import time
 import traceback
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from dacite import from_dict
+from tortoise.expressions import Q
 
 import onchebot.globals as g
 from onchebot.models import Message
-from onchebot.redis_client import redis
 
 logger = logging.getLogger("consumer")
 
 
 async def consume_once():
+    for bot in g.bots:
+        await bot.fetch_params()
+
     await consume(once=True)
 
 
@@ -27,67 +28,62 @@ async def consume(once: bool = False, stop_event: threading.Event | None = None)
     scheduler.start()
 
     while not stop_event.is_set():
-        if len(g.bots) == 0:
-            logger.error("No bots, please add one")
-            await asyncio.sleep(2)
-            continue
-
-        watched_topics = await redis().r.smembers("onchebot:watched-topics")
-
-        topic_ids = set(int(bot.topic_id) for bot in g.bots)
-        for topic in watched_topics:
-            try:
-                topic_ids.add(int(topic))
-            except:
-                pass
-
-        for topic_id in topic_ids:
-            await redis().ensure_group(
-                f"onchebot:topics:{topic_id}:messages", "onchebot"
-            )
-
+        # topic_id -> oldest last consumed msg id for any bot
+        topic_thresholds: dict[str, int] = {}
         for bot in g.bots:
+            if not bot.params:
+                continue
+
             if not once and not bot.tasks_created:
                 await bot.create_tasks(scheduler)
 
-        result = await redis().r.xreadgroup(
-            groupname="onchebot",
-            consumername="onchebot-consumer",
-            streams={
-                f"onchebot:topics:{topic_id}:messages": ">" for topic_id in topic_ids
-            },
-            block=3000,
-            count=100,
-        )
+            if (
+                str(bot.topic_id) not in topic_thresholds
+                or topic_thresholds[str(bot.topic_id)] > bot.params.last_consumed_id
+            ):
+                topic_thresholds[str(bot.topic_id)] = bot.params.last_consumed_id
 
-        for stream, messages in result:
-            topic_id = int(stream.split(":")[2])
-            topic = await redis().get_topic(topic_id)
-            for key, raw_msg in messages:
-                try:
-                    await redis().r.xack(stream, "onchebot", key)
-                    msg = from_dict(Message, json.loads(raw_msg["msg"]))
+        queries = [
+            Q(topic_id=int(topic), id__gt=threshold)
+            for topic, threshold in topic_thresholds.items()
+        ]
+        query = queries[0]
+        for q in queries[1:]:
+            query |= q
 
-                    bots = filter(lambda b: b.topic_id == topic_id, g.bots)
+        latest_messages = await Message.filter(query).order_by("topic_id", "-id")
+        if len(latest_messages) > 0:
+            logger.debug(f"{len(latest_messages)} new messages")
 
-                    for bot in bots:
-                        if bot.user and msg.username == bot.user.username:
-                            continue
+        for msg in latest_messages:
+            topic_id: int = msg.topic_id
+            try:
+                bots = filter(lambda b: b.topic_id == topic_id, g.bots)
 
-                        if int(time.time()) - bot.msg_time_threshold > msg.timestamp:
-                            continue
-                        await bot.consume_msg(msg)
-                except Exception:
-                    logger.error(traceback.format_exc())
+                for bot in bots:
+                    if not bot.params:
+                        continue
+
+                    # Skip if the message was already consumed by the bot
+                    if bot.params.last_consumed_id >= msg.id:
+                        continue
+
+                    # Skip if it's a message from the bot
+                    if bot.user and msg.username == bot.user.username:
+                        continue
+
+                    # Skip if the message is too old
+                    if int(time.time()) - bot.msg_time_threshold > msg.timestamp:
+                        continue
+
+                    # Finally consume the message
+                    await bot.consume_msg(msg)
+            except Exception:
+                logger.error(traceback.format_exc())
 
         if once:
             break
 
+        await asyncio.sleep(5)
+
     scheduler.shutdown()
-
-
-def start(stop_event: threading.Event | None = None):
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    loop.run_until_complete(consume(stop_event=stop_event))
-    loop.close()

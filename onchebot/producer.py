@@ -1,18 +1,18 @@
 import asyncio
-import json
 import logging
 import re
 import threading
 from asyncio.tasks import Task
 from collections.abc import Coroutine
-from dataclasses import asdict
 from typing import Any
+
+from tortoise import Tortoise
+from tortoise.expressions import F
 
 import onchebot.globals as g
 import onchebot.metrics as metrics
-from onchebot.models import Message
+from onchebot.models import Message, Metric, Topic
 from onchebot.onche import Onche
-from onchebot.redis_client import redis
 from onchebot.scraper import TopicScraper
 
 logger = logging.getLogger("producer")
@@ -20,8 +20,8 @@ logger = logging.getLogger("producer")
 tasks: dict[
     str,
     tuple[
-        Coroutine[Any, Any, tuple[Message | None, list[Message]]],
-        Task[tuple[Message | None, list[Message]]],
+        Coroutine[Any, Any, tuple[None]],
+        Task[None],
         int,
     ],
 ] = {}
@@ -37,19 +37,21 @@ async def produce(stop_event: threading.Event | None = None):
     if not stop_event:
         stop_event = threading.Event()
 
-    await redis().r.delete("onchebot:watched-topics")
+    msg_total, _ = await Metric.get_or_create(
+        id="messages_total", defaults={"value": 0}
+    )
 
-    msg_total = await redis().r.get(name="onchebot:metadata:messages:total")
-    if msg_total != None:
-        metrics.msg_counter.set(int(msg_total))
+    metrics.msg_counter.set(msg_total.value)
 
-    posted_total = await redis().r.get(name="onchebot:metadata:messages:posted_total")
-    if posted_total != None:
-        metrics.posted_msg_counter.set(int(posted_total))
+    posted_total, _ = await Metric.get_or_create(
+        id="posted_total", defaults={"value": 0}
+    )
+    metrics.posted_msg_counter.set(posted_total.value)
 
-    topics_total = await redis().r.get(name="onchebot:metadata:topics:total")
-    if topics_total != None:
-        metrics.topic_counter.set(int(topics_total))
+    topics_total, _ = await Metric.get_or_create(
+        id="topics_total", defaults={"value": 0}
+    )
+    metrics.topic_counter.set(topics_total.value)
 
     while not stop_event.is_set():
         topic_ids = set(bot.topic_id for bot in g.bots)
@@ -65,34 +67,31 @@ async def produce(stop_event: threading.Event | None = None):
             key = list(tasks.keys())[i]
             if tasks[key][1].done():
                 del tasks[str(key)]
-                await redis().r.srem("onchebot:watched-topics", str(key))
 
-        metrics.watched_topic_counter.set(
-            await redis().r.scard("onchebot:watched-topics")
-        )
+        metrics.watched_topic_counter.set(len(tasks))
 
-        await asyncio.sleep(12)
+        await asyncio.sleep(10)
 
     await asyncio.gather(*[t[0] for t in tasks.values()], return_exceptions=True)
+    await Tortoise.close_connections()
 
 
 # Start scraper on a topic
 async def produce_topic(
     topic_id: int, stop_event: threading.Event | None = None
-) -> tuple[Message | None, list[Message]]:
+) -> None:
     if not stop_event:
         stop_event = threading.Event()
-    msg: Message | None = await redis().get_topic_last_msg(topic_id)
+
+    last_msg_in_topic: Message | None = (
+        await Message.filter(topic_id=topic_id).order_by("-id").first()
+    )
     scraper = TopicScraper(
-        topic_id, msg.id if msg else -1, msg.timestamp if msg else -1
+        topic_id,
+        last_msg_in_topic.id if last_msg_in_topic else -1,
+        last_msg_in_topic.timestamp if last_msg_in_topic else -1,
     )
     msg_list: list[Message] = []
-
-    await redis().r.sadd("onchebot:watched-topics", str(topic_id))
-
-    will_incr_topics_total = (
-        await redis().r.exists(f"onchebot:topics:{topic_id}:messages") == 0
-    )
 
     async for messages in scraper.run(
         onche,
@@ -101,31 +100,8 @@ async def produce_topic(
         for msg in messages:
             logger.debug("New message: %s", msg)
             msg_list.append(msg)
-            await redis().r.xadd(
-                name=f"onchebot:topics:{topic_id}:messages",
-                fields={"msg": json.dumps(asdict(msg))},
-                maxlen=200,
-            )
-            metrics.msg_counter.set(
-                await redis().r.incrby(
-                    name="onchebot:metadata:messages:total", amount=1
-                )
-            )
-
-    # Increment metadata:topics:total
-    if len(msg_list) > 0 and will_incr_topics_total:
-        metrics.topic_counter.set(
-            await redis().r.incrby(name="onchebot:metadata:topics:total", amount=1)
-        )
-
-    return (msg, msg_list)
-
-
-def start(stop_event: threading.Event | None = None):
-    if not stop_event:
-        stop_event = threading.Event()
-
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    loop.run_until_complete(produce(stop_event))
-    loop.close()
+            await msg.save()
+            await Metric.filter(id="messages_total").update(value=F("value") + 1)
+            msg_total = await Metric.get_or_none(id="messages_total")
+            if msg_total:
+                metrics.topic_counter.set(msg_total.value)

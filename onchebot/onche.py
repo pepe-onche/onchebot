@@ -32,7 +32,7 @@ class OncheTopic:
         self.forum_id: int = -1
 
     def to_model(self) -> Topic:
-        return Topic(self.id, self.name, self.title, self.forum_id)
+        return Topic(id=self.id, name=self.name, title=self.title, forum_id=self.forum_id)
 
     def get_last_page(self) -> int:
         items = self.soup.find("div", class_="pagination")

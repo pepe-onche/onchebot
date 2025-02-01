@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 import signal
@@ -7,11 +8,13 @@ from queue import Queue
 
 import logging_loki
 from prometheus_client import start_http_server
+from tortoise import Tortoise
 
 from onchebot import consumer, examples
 from onchebot import globals as g
 from onchebot import onche, producer
 from onchebot.api import add_bot, add_user, setup
+from onchebot.db import init as init_db
 
 __all__ = ["add_bot", "add_user", "setup", "start", "examples", "onche"]
 
@@ -26,6 +29,32 @@ logging.getLogger("apscheduler.scheduler").disabled = True
 logging.getLogger("apscheduler.scheduler").propagate = False
 logging.getLogger("apscheduler.executors.default").disabled = True
 logging.getLogger("apscheduler.executors.default").propagate = False
+
+
+async def run():
+    if len(g.bots) == 0:
+        logger.error("No bots, please add one")
+        return
+
+    await init_db()
+
+    for user in g.users:
+        await user.update_or_create(
+            defaults={"username": user.username, "password": user.password}
+        )
+
+    for bot in g.bots:
+        await bot.fetch_params()
+
+    try:
+        await asyncio.gather(
+            producer.produce(stop_event), consumer.consume(False, stop_event)
+        )
+    except Exception as e:
+        stop_event.set()
+        raise e
+
+    await Tortoise.close_connections()
 
 
 def start():
@@ -53,13 +82,9 @@ def start():
 
     signal.signal(signal.SIGINT, signal_handler)
 
-    thread_producer = threading.Thread(target=producer.start, args=(stop_event,))
-    thread_consumer = threading.Thread(target=consumer.start, args=(stop_event,))
-
-    thread_producer.start()
-    thread_consumer.start()
-
-    thread_producer.join()
-    thread_consumer.join()
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop.run_until_complete(run())
+    loop.close()
 
     sys.exit(0)

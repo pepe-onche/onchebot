@@ -1,5 +1,6 @@
 {
   "reportImportCycles": "none",
   "reportUnusedCallResult": "none",
+  "reportUnknownMemberType": "none",
   "reportExplicitAny": "none"
 }

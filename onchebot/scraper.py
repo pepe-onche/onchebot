@@ -9,7 +9,6 @@ import aiohttp
 import onchebot.globals as g
 from onchebot.models import Message
 from onchebot.onche import NotFoundError, Onche, OncheTopic
-from onchebot.redis_client import redis
 
 logger = logging.getLogger("scraper")
 
@@ -41,7 +40,10 @@ class TopicScraper:
             stop_event = threading.Event()
 
         self.topic = await onche.init_topic(self.topic_id)
-        await redis().set_topic(self.topic.to_model())
+        try:
+            await self.topic.to_model().save()
+        except:
+            pass
         self.start_timestamp = int(time.time())
 
         while not stop_event.is_set():

@@ -21,12 +21,9 @@ def setup(**kwargs: dict[str, Any]):
 
 
 def add_user(username: str, password: str) -> User:
-    try:
-        return next(u for u in g.users if username.lower() == u.username.lower())
-    except:
-        user = User(username, password)
-        g.users.append(user)
-        return user
+    user = User(username=username, password=password)
+    g.users.append(user)
+    return user
 
 
 def add_bot(
@@ -36,6 +33,7 @@ def add_bot(
     default_state: dict[str, Any] | None = None,
     modules: list[BotModule] | None = None,
     prefix: str | None = None,
+    msg_time_threshold: int = 10 * 60,
 ):
     if any(b.id == id for b in g.bots):
         raise Exception(f"Bot {id} already exists")
@@ -53,12 +51,13 @@ def add_bot(
         modules = []
 
     bot = Bot(
-        id,
+        id=id,
         user=_user,
         topic_id=topic_id,
         modules=modules,
         default_state=default_state,
         prefix=prefix,
+        msg_time_threshold=msg_time_threshold,
     )
     g.bots.append(bot)
     metrics.bot_counter.set(len(g.bots))

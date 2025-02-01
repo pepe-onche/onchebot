@@ -2,18 +2,22 @@ import json
 import logging
 import traceback
 from copy import deepcopy
+from dataclasses import dataclass
 from typing import IO, Any, Callable, Type, TypeVar
 
 from apscheduler.job import Job
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.base import BaseTrigger
+from tortoise import fields
+from tortoise.expressions import F
+from tortoise.models import Model
 
+import onchebot.globals as g
 import onchebot.metrics as metrics
 from onchebot.bot_module import BotModule
 from onchebot.command import Command, CommandFunction
-from onchebot.models import Message, User
+from onchebot.models import BotParams, Message, Metric, User
 from onchebot.onche import NotLoggedInError, Onche
-from onchebot.redis_client import RedisLock, redis
 from onchebot.task import Task
 
 logger = logging.getLogger("bot")
@@ -30,31 +34,35 @@ class Bot:
         id: str,
         user: User,
         topic_id: int,
-        modules: list[T] | None = None,
-        default_state: dict[str, Any] | None = None,
-        msg_time_threshold: int = 30 * 60,
-        prefix: str | None = None,
+        default_state: dict[str, Any],
+        modules: list[BotModule],
+        prefix: str | None,
+        msg_time_threshold: int,
     ) -> None:
-        self.id: str = id
-        self.topic_id: int = topic_id
+        self.id = id
+        self.topic_id = topic_id
+        self.user = user
+        self.state: dict[str, Any] = deepcopy(default_state) if default_state else {}
         self.on_message_fn: OnMessageFunction | None = None
         self.commands: list[Command] = []
         self.task_fns: list[Task] = []
         self.default_config: dict[str, Any] = {}
         self.default_state: dict[str, Any] = default_state if default_state else {}
-        self.config: dict[str, Any] = {}
-        self.state: dict[str, Any] = deepcopy(default_state) if default_state else {}
-        self.enabled: bool = True
         self.tasks: list[Job] = []
         self.tasks_created: bool = False
-        self.modules = modules if modules else []
-        self.user: User = user
         self.onche = Onche(user.username, user.password)
         self.msg_time_threshold = msg_time_threshold
         self.prefix = prefix
+        self.modules = modules
         for module in self.modules:
             module.init(bot=self)
-        self._set_state(self.state)
+        self.refresh_state(self.state)
+        self.params: BotParams | None = None
+
+    async def fetch_params(self):
+        self.params, _ = await BotParams.get_or_create(
+            id=self.id, defaults={"state": self.state, "last_consumed_id": -1}
+        )
 
     def get_module(self, module_type: type[T]) -> T:
         return next(
@@ -82,14 +90,14 @@ class Bot:
         def decorator(func: Callable[[], Any]):
             async def wrapper():
                 await func()
-                await self._save()
+                await self.save()
 
             self.task_fns.append(Task(func=wrapper, trigger=trigger))
             return func
 
         return decorator
 
-    def _set_state(self, state: dict[str, Any] = {}):
+    def refresh_state(self, state: dict[str, Any] = {}):
         modules_default_state = {}
         for d in [m.default_state for m in self.modules]:
             modules_default_state.update(d)
@@ -103,14 +111,6 @@ class Bot:
         if key:
             return self.state.get(key, None)
         return self.state
-
-    async def _save(self) -> None:
-        await redis().r.hset(
-            f"onchebot:bots:{self.id}",
-            mapping={
-                "state": json.dumps(self.state),
-            },
-        )
 
     def get_task_fns(self):
         task_fns = [*self.task_fns.copy()]
@@ -129,7 +129,7 @@ class Bot:
             l.func for l in self.get_task_fns() if l.func.__name__ == task_func_name
         )
         await task_func()
-        await self._save()
+        await self.save()
 
     def _cancel_tasks(self) -> None:
         for task in self.tasks:
@@ -150,6 +150,9 @@ class Bot:
         modules_commands = [m.commands for m in self.modules]
         m_commands = [item for sublist in modules_commands for item in sublist]
         command_list = [*self.commands, *m_commands]
+
+        if self.params:
+            self.params.last_consumed_id = msg.id
 
         def cmd_to_str(cmd: str):
             return "/" + ((self.prefix + "/") if self.prefix else "") + cmd
@@ -178,9 +181,15 @@ class Bot:
                         pass
                     logger.info(f"COMMAND FOUND: {cmd_to_str(command.cmd)} from {msg}")
                     await command.func(msg, args)
-                    await self._save()
+
+                    if self.params:
+                        await self.params.save()
+
                     return True
-        await self._save()
+
+        if self.params:
+            await self.params.save()
+
         return False
 
     async def post_message(
@@ -194,22 +203,28 @@ class Bot:
             t = (
                 topic_id
                 if topic_id
-                else (answer_to.topic_id if answer_to else self.topic_id)
-            )
-            if not t:
-                raise Exception("Undefined topic in post_message")
-            res = await self.onche.post_message(t, content, answer_to)
-            metrics.posted_msg_counter.set(
-                await redis().r.incrby(
-                    name="onchebot:metadata:messages:posted_total", amount=1
+                else (
+                    answer_to.topic.id
+                    if answer_to and answer_to.topic
+                    else self.topic_id
                 )
             )
+            if not isinstance(t, int):
+                raise Exception("Undefined topic in post_message")
+
+            res = await self.onche.post_message(t, content, answer_to)
+
+            await Metric.filter(id="posted_total").update(value=F("value") + 1)
+            posted_total = await Metric.get_or_none(id="posted_total")
+            if posted_total:
+                metrics.topic_counter.set(posted_total.value)
+
             return res
         except NotLoggedInError:
             max_retry = 5
             if _retry >= max_retry:
                 raise Exception(
-                    f"Could not logged after {_retry} retries, aborting post_message"
+                    f"Could not log in after {_retry} retries, aborting post_message"
                 )
 
             logger.info("Not logged in, will retry post_message after log in")
@@ -217,24 +232,17 @@ class Bot:
             return await self.post_message(content, topic_id, answer_to, _retry + 1)
 
     async def login(self):
-        lock = RedisLock(f"onchebot:users:{self.user.username}:logging_in")
-        await lock.acquire_lock()
-
-        # Check if another bot logged in while we acquired the lock
-        cookie2 = await redis().get_user_cookie(self.user.username)
-        if cookie2 and self.user.cookie != cookie2:
-            self.user.cookie = cookie2
-            self.onche.cookie = cookie2
+        old_cookie = self.user.cookie
+        await self.user.refresh_from_db()
+        if self.user.cookie != old_cookie:
+            self.onche.cookie = self.user.cookie
             return
 
-        # If not, log in
         cookie = await self.onche.login()
         if not cookie:
             return
         self.user.cookie = cookie
-        await redis().set_user_cookie(self.user.username, cookie)
-
-        await lock.release_lock()
+        await self.user.save()
 
     async def upload_image(
         self,
