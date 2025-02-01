@@ -204,8 +204,8 @@ class Bot:
                 topic_id
                 if topic_id
                 else (
-                    answer_to.topic.id
-                    if answer_to and answer_to.topic
+                    answer_to.topic_id
+                    if answer_to
                     else self.topic_id
                 )
             )
