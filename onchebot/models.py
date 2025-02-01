@@ -53,7 +53,7 @@ class Topic(Model):
 class User(Model):
     username = fields.CharField(max_length=255, unique=True)
     password = fields.CharField(max_length=255, null=True)
-    cookie = fields.CharField(max_length=255, null=True)
+    cookie = fields.CharField(max_length=666, null=True)
 
     class Meta:  # pyright: ignore[reportIncompatibleVariableOverride]
         table = "onchebot_users"
