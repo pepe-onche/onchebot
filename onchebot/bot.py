@@ -1,23 +1,19 @@
-import json
+import asyncio
 import logging
 import traceback
 from copy import deepcopy
-from dataclasses import dataclass
-from typing import IO, Any, Callable, Type, TypeVar
+from typing import IO, Any, Callable, TypeVar
 
 from apscheduler.job import Job
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.base import BaseTrigger
-from tortoise import fields
 from tortoise.expressions import F
-from tortoise.models import Model
 
-import onchebot.globals as g
 import onchebot.metrics as metrics
 from onchebot.bot_module import BotModule
 from onchebot.command import Command, CommandFunction
 from onchebot.models import BotParams, Message, Metric, User
-from onchebot.onche import NotLoggedInError, Onche
+from onchebot.onche import NotLoggedInError, NotPostedError, Onche
 from onchebot.task import Task
 
 logger = logging.getLogger("bot")
@@ -39,9 +35,9 @@ class Bot:
         prefix: str | None,
         msg_time_threshold: int,
     ) -> None:
-        self.id = id
-        self.topic_id = topic_id
-        self.user = user
+        self.id: str = id
+        self.topic_id: int = topic_id
+        self.user: User = user
         self.state: dict[str, Any] = deepcopy(default_state) if default_state else {}
         self.on_message_fn: OnMessageFunction | None = None
         self.commands: list[Command] = []
@@ -50,10 +46,10 @@ class Bot:
         self.default_state: dict[str, Any] = default_state if default_state else {}
         self.tasks: list[Job] = []
         self.tasks_created: bool = False
-        self.onche = Onche(user.username, user.password)
-        self.msg_time_threshold = msg_time_threshold
-        self.prefix = prefix
-        self.modules = modules
+        self.onche: Onche = Onche(user.username, user.password)
+        self.msg_time_threshold: int = msg_time_threshold
+        self.prefix: str | None = prefix
+        self.modules: list[BotModule] = modules
         for module in self.modules:
             module.init(bot=self)
         self.refresh_state(self.state)
@@ -90,7 +86,9 @@ class Bot:
         def decorator(func: Callable[[], Any]):
             async def wrapper():
                 await func()
-                await self.save()
+                if self.params:
+                    self.params.state = self.state
+                    await self.params.save()
 
             self.task_fns.append(Task(func=wrapper, trigger=trigger))
             return func
@@ -107,9 +105,9 @@ class Bot:
     def set_state(self, key: str, value: Any):
         self.state[key] = value
 
-    def get_state(self, key: str | None = None) -> Any:
+    def get_state(self, key: str | None = None) -> Any:  # pyright: ignore[reportAny]
         if key:
-            return self.state.get(key, None)
+            return self.state.get(key, None)  # pyright: ignore[reportAny]
         return self.state
 
     def get_task_fns(self):
@@ -129,7 +127,9 @@ class Bot:
             l.func for l in self.get_task_fns() if l.func.__name__ == task_func_name
         )
         await task_func()
-        await self.save()
+        if self.params:
+            self.params.state = self.state
+            await self.params.save()
 
     def _cancel_tasks(self) -> None:
         for task in self.tasks:
@@ -192,6 +192,15 @@ class Bot:
 
         return False
 
+    async def verify_posted(self, topic_id: int, author: str, min_timestamp: int, timeout: int, interval: int):
+        start_time = asyncio.get_event_loop().time()
+        while (asyncio.get_event_loop().time() - start_time) < timeout:
+            result = await Message.filter(topic_id=topic_id, username=author, timestamp__gt=min_timestamp).exists()
+            if result:
+                return True
+            await asyncio.sleep(interval)
+        raise NotPostedError()
+
     async def post_message(
         self,
         content: str,
@@ -200,11 +209,11 @@ class Bot:
         _retry: int = 0,
     ) -> int:
         try:
-            t = (
+            t = ( # pyright: ignore[reportUnknownVariableType]
                 topic_id
                 if topic_id
                 else (
-                    answer_to.topic_id
+                    answer_to.topic_id  # pyright: ignore[reportAttributeAccessIssue]
                     if answer_to
                     else self.topic_id
                 )
@@ -212,7 +221,13 @@ class Bot:
             if not isinstance(t, int):
                 raise Exception("Undefined topic in post_message")
 
+            last_post = await Message.filter(topic_id=topic_id).order_by("-timestamp").first()
+            last_post_time = last_post.timestamp if last_post else 0
             res = await self.onche.post_message(t, content, answer_to)
+
+            # Watch the database until posted, raise NotPostedError if it times out
+            if self.onche.username:
+                await self.verify_posted(t, self.onche.username, min_timestamp=last_post_time, timeout=20, interval=2)
 
             await Metric.filter(id="posted_total").update(value=F("value") + 1)
             posted_total = await Metric.get_or_none(id="posted_total")
@@ -229,6 +244,17 @@ class Bot:
 
             logger.info("Not logged in, will retry post_message after log in")
             await self.login()
+            return await self.post_message(content, topic_id, answer_to, _retry + 1)
+        except NotPostedError:
+            max_retry = 4
+            if _retry >= max_retry:
+                raise Exception(
+                    f"Could not post after {_retry} retries, aborting post_message"
+                )
+
+            wait = 3
+            logger.info(f"Not posted, retrying post_message after {wait} secs")
+            await asyncio.sleep(wait)
             return await self.post_message(content, topic_id, answer_to, _retry + 1)
 
     async def login(self):

@@ -1,13 +1,13 @@
 from typing import Any, Callable
 
 from onchebot.command import Command
-from onchebot.models import Message
 from onchebot.task import Task
 
 
 class BotModule:
     def __init__(self):
         from onchebot.bot import Bot
+        from onchebot.models import Message
 
         self.commands: list[Command] = []
         self.tasks: list[Task] = []

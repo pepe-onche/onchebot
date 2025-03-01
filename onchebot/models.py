@@ -1,7 +1,9 @@
 from dataclasses import dataclass
 from typing import Any
 
-from tortoise import fields
+from tortoise.fields import (BigIntField, CharField, Field, ForeignKeyField,
+                             ForeignKeyNullableRelation, IntField, JSONField,
+                             TextField)
 from tortoise.models import Model
 
 
@@ -14,55 +16,55 @@ class Config:
 
 
 class Metric(Model):
-    id = fields.TextField(pk=True)
-    value = fields.IntField()
+    id: Field[str] = TextField(pk=True)
+    value: Field[int] = IntField()
 
     class Meta:  # pyright: ignore[reportIncompatibleVariableOverride]
-        table = "onchebot_metrics"
-
-
-class Message(Model):
-    id = fields.IntField(pk=True)
-    stickers: fields.Field[dict[str, Any]] = fields.JSONField()
-    mentions: fields.Field[dict[str, Any]] = fields.JSONField()
-    content_html = fields.TextField()
-    content_without_stickers = fields.TextField()
-    content = fields.TextField()
-    username = fields.CharField(max_length=255)
-    timestamp = fields.BigIntField()
-    topic = fields.ForeignKeyField(
-        "models.Topic", related_name="messages", null=True, default=-1
-    )
-    answer_to = fields.IntField(null=True)
-
-    class Meta:  # pyright: ignore[reportIncompatibleVariableOverride]
-        table = "onchebot_messages"
-        indexes = [("topic_id", "id")]
+        table: str = "onchebot_metrics"
 
 
 class Topic(Model):
-    id = fields.IntField(pk=True)
-    name = fields.CharField(max_length=255)
-    title = fields.CharField(max_length=255)
-    forum_id = fields.IntField()
+    id: Field[int] = IntField(pk=True)
+    name: Field[str] = CharField(max_length=255)
+    title: Field[str] = CharField(max_length=255)
+    forum_id: Field[int] = IntField()
 
     class Meta:  # pyright: ignore[reportIncompatibleVariableOverride]
-        table = "onchebot_topics"
+        table: str = "onchebot_topics"
+
+
+class Message(Model):
+    id: Field[int] = IntField(pk=True)
+    stickers: Field[dict[str, Any]] = JSONField()
+    mentions: Field[dict[str, Any]] = JSONField()
+    content_html: Field[str] = TextField()
+    content_without_stickers: Field[str] = TextField()
+    content: Field[str] = TextField()
+    username: Field[str] = CharField(max_length=255)
+    timestamp: Field[int] = BigIntField()
+    topic: ForeignKeyNullableRelation[Topic] = ForeignKeyField(
+        "models.Topic", related_name="messages", null=True, default=-1
+    )
+    answer_to: Field[int] = IntField(null=True)
+
+    class Meta:  # pyright: ignore[reportIncompatibleVariableOverride]
+        table: str = "onchebot_messages"
+        indexes: list[tuple[str, str]] = [("topic_id", "id")]
 
 
 class User(Model):
-    username = fields.CharField(max_length=255, unique=True)
-    password = fields.CharField(max_length=255, null=True)
-    cookie = fields.CharField(max_length=666, null=True)
+    username: Field[str] = CharField(max_length=255, unique=True)
+    password: Field[str] = CharField(max_length=255, null=True)
+    cookie: Field[str] = CharField(max_length=666, null=True)
 
     class Meta:  # pyright: ignore[reportIncompatibleVariableOverride]
-        table = "onchebot_users"
+        table: str = "onchebot_users"
 
 
 class BotParams(Model):
-    id = fields.TextField(pk=True)
-    state: fields.Field[dict[str, Any]] = fields.JSONField()
-    last_consumed_id = fields.BigIntField()
+    id: Field[str] = TextField(pk=True)
+    state: Field[dict[str, Any]] = JSONField()
+    last_consumed_id: Field[int] = BigIntField()
 
     class Meta:  # pyright: ignore[reportIncompatibleVariableOverride]
-        table = "onchebot_bots"
+        table: str = "onchebot_bots"

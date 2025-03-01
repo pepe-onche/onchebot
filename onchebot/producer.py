@@ -11,7 +11,7 @@ from tortoise.expressions import F
 
 import onchebot.globals as g
 import onchebot.metrics as metrics
-from onchebot.models import Message, Metric, Topic
+from onchebot.models import Message, Metric
 from onchebot.onche import Onche
 from onchebot.scraper import TopicScraper
 
@@ -20,7 +20,7 @@ logger = logging.getLogger("producer")
 tasks: dict[
     str,
     tuple[
-        Coroutine[Any, Any, tuple[None]],
+        Coroutine[Any, Any, None],
         Task[None],
         int,
     ],
