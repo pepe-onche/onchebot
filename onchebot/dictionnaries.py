@@ -1,3 +1,4 @@
+import importlib.resources
 import random
 
 insults = [
@@ -687,6 +688,35 @@ loves = [
     "Vrai",
 ]
 
+letters_lower = [
+    "a",
+    "b",
+    "c",
+    "d",
+    "e",
+    "f",
+    "g",
+    "h",
+    "i",
+    "j",
+    "k",
+    "l",
+    "m",
+    "n",
+    "o",
+    "p",
+    "q",
+    "r",
+    "s",
+    "t",
+    "u",
+    "v",
+    "w",
+    "x",
+    "y",
+    "z",
+]
+
 
 def get_random_insult():
     return random.choice(insults)
@@ -694,3 +724,16 @@ def get_random_insult():
 
 def get_random_loves(samples_size: int):
     return random.sample(loves, samples_size)
+
+
+def get_random_scrabble_word() -> str:
+    with importlib.resources.open_text("onchebot", "scrabble_words.txt") as file:
+        total_lines = sum(1 for _ in file)
+
+        random_index = random.randint(0, total_lines - 1)
+
+        file.seek(0)
+        for i, line in enumerate(file):
+            if i == random_index:
+                return line.strip()
+    return "merde"
