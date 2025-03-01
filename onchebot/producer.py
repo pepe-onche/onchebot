@@ -104,4 +104,4 @@ async def produce_topic(
             await Metric.filter(id="messages_total").update(value=F("value") + 1)
             msg_total = await Metric.get_or_none(id="messages_total")
             if msg_total:
-                metrics.topic_counter.set(msg_total.value)
+                metrics.msg_counter.set(msg_total.value)
