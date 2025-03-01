@@ -183,6 +183,9 @@ class NotLoggedInError(Exception):
 class NotFoundError(Exception):
     pass
 
+class NotPostedError(Exception):
+    pass
+
 
 class Onche:
     def __init__(self, username: str | None = None, password: str | None = None):
