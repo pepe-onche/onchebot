@@ -51,7 +51,7 @@ async def consume(once: bool = False, stop_event: threading.Event | None = None)
         for q in queries[1:]:
             query |= q
 
-        latest_messages = await Message.filter(query).order_by("topic_id", "-id")
+        latest_messages = await Message.filter(query).order_by("topic_id", "id")
         if len(latest_messages) > 0:
             logger.debug(f"{len(latest_messages)} new messages")
 

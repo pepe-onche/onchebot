@@ -128,13 +128,17 @@ def create(id: str, user: User, topic_id: int, admin: str) -> Bot:
 
         # Letter already guessed
         if l in hangman.state["guesses"]:
+            remove_point(msg.username)
+            score = hangman.state["points"][msg.username]
+            state = state_text()
+            t = random.choice(
+                [
+                    "Il faut suivre enculin",
+                    "Déjà dit",
+                ]
+            )
             return await hangman.post_message(
-                random.choice(
-                    [
-                        "Il faut suivre enculin",
-                        "Déjà dit",
-                    ]
-                ),
+                t + f", il te reste {score}/{HANGMAN_START_POINTS} points\n\n{state}",
                 answer_to=msg,
             )
 

@@ -9,6 +9,7 @@ async def test_hangman(onchebot_setup: None):  # pyright: ignore[reportUnusedPar
     bot = create_hangman("hangman", test.user, test.topic_id, "Admin")
     bot.state["word"] = "merde"
     khey = "Connard"
+    khey2 = "Pute"
 
     await test.add_msg("/ping", khey)
     await consume_once()
@@ -19,10 +20,12 @@ async def test_hangman(onchebot_setup: None):  # pyright: ignore[reportUnusedPar
     assert "_ _ _ _ _" in test.posted_msgs[-1].content
 
     await test.add_msg("/lettre a", khey)
+    await test.add_msg("/lettre a", khey2)
     await consume_once()
-    assert "_ _ _ _ _" in test.posted_msgs[-1].content
+    assert "_ _ _ _ _" in test.posted_msgs[-2].content
     assert bot.state["guesses"]["a"] == khey
     assert bot.state["points"][khey] == HANGMAN_START_POINTS - 1
+    assert bot.state["points"][khey2] == HANGMAN_START_POINTS - 1
 
     await test.add_msg("/lettre b", khey)
     await consume_once()
@@ -32,27 +35,26 @@ async def test_hangman(onchebot_setup: None):  # pyright: ignore[reportUnusedPar
 
     await test.add_msg("/lettre A", khey)
     await consume_once()
-    assert "_ _ _ _ _" not in test.posted_msgs[-1].content
     assert bot.state["guesses"]["a"] == khey
-    assert bot.state["points"][khey] == HANGMAN_START_POINTS - 2
+    assert bot.state["points"][khey] == HANGMAN_START_POINTS - 3
 
     await test.add_msg("/lettre m", khey)
     await consume_once()
     assert "M _ _ _ _" in test.posted_msgs[-1].content
     assert bot.state["guesses"]["m"] == khey
-    assert bot.state["points"][khey] == HANGMAN_START_POINTS - 3
+    assert bot.state["points"][khey] == HANGMAN_START_POINTS - 4
 
     await test.add_msg("/lettre e", khey)
     await consume_once()
     assert "M E _ _ E" in test.posted_msgs[-1].content
     assert bot.state["guesses"]["e"] == khey
-    assert bot.state["points"][khey] == HANGMAN_START_POINTS - 4
+    assert bot.state["points"][khey] == HANGMAN_START_POINTS - 5
 
     await test.add_msg("/lettre r", khey)
     await consume_once()
     assert "M E R _ E" in test.posted_msgs[-1].content
     assert bot.state["guesses"]["r"] == khey
-    assert bot.state["points"][khey] == HANGMAN_START_POINTS - 5
+    assert bot.state["points"][khey] == HANGMAN_START_POINTS - 6
 
     await test.add_msg("/lettre d", khey)
     await consume_once()
