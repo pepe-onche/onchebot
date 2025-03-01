@@ -6,7 +6,7 @@ from ast import FormattedValue
 
 import onchebot
 from onchebot.bot import Bot
-from onchebot.dictionnaries import get_random_scrabble_word, letters_lower
+from onchebot.dictionnaries import get_random_hangman_word, letters_lower
 from onchebot.models import Message, User
 from onchebot.modules import Misc
 
@@ -21,7 +21,7 @@ def create(id: str, user: User, topic_id: int, admin: str) -> Bot:
         user,
         topic_id,
         modules=[Misc(admin=admin)],
-        default_state={"word": get_random_scrabble_word(), "guesses": {}, "points": {}},
+        default_state={"word": get_random_hangman_word(), "guesses": {}, "points": {}},
     )
 
     def remove_accents(text: str) -> str:
@@ -65,7 +65,7 @@ def create(id: str, user: User, topic_id: int, admin: str) -> Bot:
         word = hangman.state["word"].upper()
         hangman.state["guesses"] = {}
         hangman.state["points"] = {}
-        hangman.state["word"] = get_random_scrabble_word()
+        hangman.state["word"] = get_random_hangman_word()
         state = state_text()
         return await hangman.post_message(
             f"Bravo champion, le mot était [b]{word}[/b] :Fritechat:\nNouveau mot:\n\n{state}",

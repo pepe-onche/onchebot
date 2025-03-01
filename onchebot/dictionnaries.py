@@ -737,3 +737,16 @@ def get_random_scrabble_word() -> str:
             if i == random_index:
                 return line.strip()
     return "merde"
+
+
+def get_random_hangman_word() -> str:
+    with importlib.resources.open_text("onchebot", "hangman_words.txt") as file:
+        total_lines = sum(1 for _ in file)
+
+        random_index = random.randint(0, total_lines - 1)
+
+        file.seek(0)
+        for i, line in enumerate(file):
+            if i == random_index:
+                return line.strip()
+    return "merde"

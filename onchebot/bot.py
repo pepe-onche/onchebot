@@ -52,13 +52,13 @@ class Bot:
         self.modules: list[BotModule] = modules
         for module in self.modules:
             module.init(bot=self)
-        self.refresh_state(self.state)
         self.params: BotParams | None = None
 
     async def fetch_params(self):
         self.params, _ = await BotParams.get_or_create(
             id=self.id, defaults={"state": self.state, "last_consumed_id": -1}
         )
+        self.refresh_state(self.params.state)
 
     def get_module(self, module_type: type[T]) -> T:
         return next(
