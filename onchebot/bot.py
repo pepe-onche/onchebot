@@ -192,10 +192,19 @@ class Bot:
 
         return False
 
-    async def verify_posted(self, topic_id: int, author: str, min_timestamp: int, timeout: int, interval: int):
+    async def verify_posted(
+        self,
+        topic_id: int,
+        author: str,
+        min_timestamp: int,
+        timeout: int,
+        interval: int,
+    ):
         start_time = asyncio.get_event_loop().time()
         while (asyncio.get_event_loop().time() - start_time) < timeout:
-            result = await Message.filter(topic_id=topic_id, username=author, timestamp__gt=min_timestamp).exists()
+            result = await Message.filter(
+                topic_id=topic_id, username=author, timestamp__gt=min_timestamp
+            ).exists()
             if result:
                 return True
             await asyncio.sleep(interval)
@@ -209,7 +218,7 @@ class Bot:
         _retry: int = 0,
     ) -> int:
         try:
-            t = ( # pyright: ignore[reportUnknownVariableType]
+            t = (  # pyright: ignore[reportUnknownVariableType]
                 topic_id
                 if topic_id
                 else (
@@ -221,18 +230,26 @@ class Bot:
             if not isinstance(t, int):
                 raise Exception("Undefined topic in post_message")
 
-            last_post = await Message.filter(topic_id=topic_id).order_by("-timestamp").first()
+            last_post = (
+                await Message.filter(topic_id=topic_id).order_by("-timestamp").first()
+            )
             last_post_time = last_post.timestamp if last_post else 0
             res = await self.onche.post_message(t, content, answer_to)
 
             # Watch the database until posted, raise NotPostedError if it times out
             if self.onche.username:
-                await self.verify_posted(t, self.onche.username, min_timestamp=last_post_time, timeout=20, interval=2)
+                await self.verify_posted(
+                    t,
+                    self.onche.username,
+                    min_timestamp=last_post_time,
+                    timeout=20,
+                    interval=2,
+                )
 
             await Metric.filter(id="posted_total").update(value=F("value") + 1)
             posted_total = await Metric.get_or_none(id="posted_total")
             if posted_total:
-                metrics.topic_counter.set(posted_total.value)
+                metrics.posted_msg_counter.set(posted_total.value)
 
             return res
         except NotLoggedInError:
