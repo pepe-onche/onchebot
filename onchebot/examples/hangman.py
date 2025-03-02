@@ -48,11 +48,21 @@ def create(id: str, user: User, topic_id: int, admin: str) -> Bot:
             for l in word
         ]
         word = " ".join(word)
-        return f"[center][b]{word}[/b][/center]"
+        l_list: list[str] = list(hangman.state["guesses"].keys())
+        l_list.sort()
+        guesses = "".join(l_list).upper()
+        guesses = (
+            f"\n\n[center]Lettres déjà utilisées: [b]{guesses}[/b][/center]"
+            if len(guesses) > 0
+            else ""
+        )
+        return f"[center][b]{word}[/b][/center]{guesses}"
 
-    def remove_point(khey: str):
+    def ensure_point(khey: str):
         if khey not in hangman.state["points"]:
             hangman.state["points"][khey] = HANGMAN_START_POINTS
+    def remove_point(khey: str):
+        ensure_point(khey)
         hangman.state["points"][khey] -= 1
 
     def is_win() -> bool:
@@ -60,7 +70,7 @@ def create(id: str, user: User, topic_id: int, admin: str) -> Bot:
         return all(l in hangman.state["guesses"] for l in letters_in_word)
 
     async def on_win(msg: Message):
-        remove_point(msg.username)
+        ensure_point(msg.username)
         score = hangman.state["points"][msg.username]
         word = hangman.state["word"].upper()
         hangman.state["guesses"] = {}
@@ -90,7 +100,7 @@ def create(id: str, user: User, topic_id: int, admin: str) -> Bot:
         )
 
     async def on_good(msg: Message):
-        remove_point(msg.username)
+        ensure_point(msg.username)
         score = hangman.state["points"][msg.username]
         sticker = random.choice(
             [

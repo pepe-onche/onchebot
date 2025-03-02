@@ -52,13 +52,13 @@ class Bot:
         self.modules: list[BotModule] = modules
         for module in self.modules:
             module.init(bot=self)
+        self.refresh_state(self.state)
         self.params: BotParams | None = None
 
     async def fetch_params(self):
         self.params, _ = await BotParams.get_or_create(
             id=self.id, defaults={"state": self.state, "last_consumed_id": -1}
         )
-        self.refresh_state(self.params.state)
 
     def get_module(self, module_type: type[T]) -> T:
         return next(
@@ -183,11 +183,16 @@ class Bot:
                     await command.func(msg, args)
 
                     if self.params:
+                        logger.info("saving params")
+                        self.params.state = self.state
                         await self.params.save()
 
                     return True
 
         if self.params:
+            logger.info("saving params")
+            self.refresh_state(self.state)
+            self.params.state = self.state
             await self.params.save()
 
         return False
@@ -196,14 +201,14 @@ class Bot:
         self,
         topic_id: int,
         author: str,
-        min_timestamp: int,
+        min_id: int,
         timeout: int,
         interval: int,
     ):
         start_time = asyncio.get_event_loop().time()
         while (asyncio.get_event_loop().time() - start_time) < timeout:
             result = await Message.filter(
-                topic_id=topic_id, username=author, timestamp__gt=min_timestamp
+                topic_id=topic_id, username=author, id__gt=min_id
             ).exists()
             if result:
                 return True
@@ -231,9 +236,9 @@ class Bot:
                 raise Exception("Undefined topic in post_message")
 
             last_post = (
-                await Message.filter(topic_id=topic_id).order_by("-timestamp").first()
+                await Message.filter(topic_id=topic_id).order_by("-id").first()
             )
-            last_post_time = last_post.timestamp if last_post else 0
+            last_post_id = last_post.id if last_post else 0
             res = await self.onche.post_message(t, content, answer_to)
 
             # Watch the database until posted, raise NotPostedError if it times out
@@ -241,7 +246,7 @@ class Bot:
                 await self.verify_posted(
                     t,
                     self.onche.username,
-                    min_timestamp=last_post_time,
+                    min_id=last_post_id,
                     timeout=20,
                     interval=2,
                 )
@@ -269,7 +274,7 @@ class Bot:
                     f"Could not post after {_retry} retries, aborting post_message"
                 )
 
-            wait = 3
+            wait = 15
             logger.info(f"Not posted, retrying post_message after {wait} secs")
             await asyncio.sleep(wait)
             return await self.post_message(content, topic_id, answer_to, _retry + 1)
