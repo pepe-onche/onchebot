@@ -210,6 +210,7 @@ class Bot:
             result = await Message.filter(
                 topic_id=topic_id, username=author, id__gt=min_id
             ).exists()
+            logger.info(f"verify_posted: {result}")
             if result:
                 return True
             await asyncio.sleep(interval)
@@ -235,9 +236,7 @@ class Bot:
             if not isinstance(t, int):
                 raise Exception("Undefined topic in post_message")
 
-            last_post = (
-                await Message.filter(topic_id=topic_id).order_by("-id").first()
-            )
+            last_post = await Message.filter(topic_id=topic_id).order_by("-id").first()
             last_post_id = last_post.id if last_post else 0
             res = await self.onche.post_message(t, content, answer_to)
 
