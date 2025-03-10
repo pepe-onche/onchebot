@@ -225,7 +225,9 @@ class Bot:
         topic_id: int | None = None,
         answer_to: Message | None = None,
         _retry: int = 0,
+        _last_post_id: int = 0,
     ) -> int:
+        last_post_id = _last_post_id
         try:
             t = (  # pyright: ignore[reportUnknownVariableType]
                 topic_id
@@ -239,8 +241,10 @@ class Bot:
             if not isinstance(t, int):
                 raise Exception("Undefined topic in post_message")
 
-            last_post = await Message.filter(topic_id=t).order_by("-id").first()
-            last_post_id = last_post.id if last_post else 0
+            if last_post_id == 0:
+                last_post = await Message.filter(topic_id=t).order_by("-id").first()
+                last_post_id = last_post.id if last_post else 0
+
             res = await self.onche.post_message(t, content, answer_to)
 
             # Watch the database until posted, raise NotPostedError if it times out
@@ -249,8 +253,8 @@ class Bot:
                     t,
                     self.onche.username,
                     min_id=last_post_id,
-                    timeout=20,
-                    interval=2,
+                    timeout=32,
+                    interval=3,
                 )
 
             await Metric.filter(id="posted_total").update(value=F("value") + 1)
@@ -268,7 +272,7 @@ class Bot:
 
             logger.info("Not logged in, will retry post_message after log in")
             await self.login()
-            return await self.post_message(content, topic_id, answer_to, _retry + 1)
+            return await self.post_message(content, topic_id, answer_to, _retry + 1, last_post_id)
         except NotPostedError:
             max_retry = 4
             if _retry >= max_retry:
@@ -276,10 +280,11 @@ class Bot:
                     f"Could not post after {_retry} retries, aborting post_message"
                 )
 
-            wait = 15
-            logger.info(f"Not posted, retrying post_message after {wait} secs")
+            wait = 10
+            logger.info(f"Not posted, retrying post_message after login + {wait} secs")
+            await self.login()
             await asyncio.sleep(wait)
-            return await self.post_message(content, topic_id, answer_to, _retry + 1)
+            return await self.post_message(content, topic_id, answer_to, _retry + 1, last_post_id)
 
     async def login(self):
         old_cookie = self.user.cookie
