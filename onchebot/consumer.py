@@ -15,6 +15,7 @@ logger = logging.getLogger("consumer")
 
 async def consume_once():
     for bot in g.bots:
+        logger.info("fetch B")
         await bot.fetch_params()
 
     await consume(once=True)
