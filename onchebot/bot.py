@@ -210,7 +210,7 @@ class Bot:
             result = await Message.filter(
                 topic_id=topic_id, username=author, id__gt=min_id
             ).exists()
-            logger.info(f"verify_posted: {result}")
+            logger.info(f"verify_posted: {result}, {topic_id}, {author}, {min_id}")
             if result:
                 return True
             await asyncio.sleep(interval)
