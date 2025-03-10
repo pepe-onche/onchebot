@@ -87,6 +87,7 @@ class Bot:
             async def wrapper():
                 await func()
                 if self.params:
+                    logger.info("saving params C")
                     self.params.state = self.state
                     await self.params.save()
 
@@ -128,6 +129,7 @@ class Bot:
         )
         await task_func()
         if self.params:
+            logger.info("saving params D")
             self.params.state = self.state
             await self.params.save()
 
@@ -183,14 +185,15 @@ class Bot:
                     await command.func(msg, args)
 
                     if self.params:
-                        logger.info("saving params")
+                        logger.info("saving params A")
+                        self.refresh_state(self.state)
                         self.params.state = self.state
                         await self.params.save()
 
                     return True
 
         if self.params:
-            logger.info("saving params")
+            logger.info("saving params B")
             self.refresh_state(self.state)
             self.params.state = self.state
             await self.params.save()
