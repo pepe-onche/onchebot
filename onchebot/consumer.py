@@ -28,6 +28,10 @@ async def consume(once: bool = False, stop_event: threading.Event | None = None)
     scheduler = AsyncIOScheduler()
     scheduler.start()
 
+    for bot in g.bots:
+        logger.info("fetch C")
+        await bot.fetch_params()
+
     while not stop_event.is_set():
         # topic_id -> oldest last consumed msg id for any bot
         topic_thresholds: dict[str, int] = {}
