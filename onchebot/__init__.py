@@ -45,7 +45,6 @@ async def run():
 
     for bot in g.bots:
         bot.user = next(user for user in g.users if user.username == bot.user.username)
-        logger.info("fetch A")
         await bot.fetch_params()
 
     try:

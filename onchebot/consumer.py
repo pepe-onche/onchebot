@@ -15,7 +15,6 @@ logger = logging.getLogger("consumer")
 
 async def consume_once():
     for bot in g.bots:
-        logger.info("fetch B")
         await bot.fetch_params()
 
     await consume(once=True)
@@ -29,7 +28,6 @@ async def consume(once: bool = False, stop_event: threading.Event | None = None)
     scheduler.start()
 
     for bot in g.bots:
-        logger.info("fetch C")
         await bot.fetch_params()
 
     while not stop_event.is_set():

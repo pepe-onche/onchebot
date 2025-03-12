@@ -88,7 +88,6 @@ class Bot:
             async def wrapper():
                 await func()
                 if self.params:
-                    logger.info("saving params C")
                     self.params.state = self.state
                     await self.params.save()
 
@@ -130,7 +129,6 @@ class Bot:
         )
         await task_func()
         if self.params:
-            logger.info("saving params D")
             self.params.state = self.state
             await self.params.save()
 
@@ -186,7 +184,6 @@ class Bot:
                     await command.func(msg, args)
 
                     if self.params:
-                        logger.info("saving params A")
                         self.refresh_state(self.state)
                         self.params.state = self.state
                         await self.params.save()
@@ -194,7 +191,6 @@ class Bot:
                     return True
 
         if self.params:
-            logger.info("saving params B")
             self.refresh_state(self.state)
             self.params.state = self.state
             await self.params.save()
@@ -214,8 +210,8 @@ class Bot:
             result = await Message.filter(
                 topic_id=topic_id, username=author, id__gt=min_id
             ).exists()
-            logger.info(f"verify_posted: {result}, {topic_id}, {author}, {min_id}")
             if result:
+                logger.info(f"Message verified")
                 return True
             await asyncio.sleep(interval)
         raise NotPostedError()
