@@ -22,6 +22,7 @@ dependencies = [
   "apscheduler==3.11.0",
   "python-logging-loki==0.3.1",
   "prometheus-client==0.21.0",
+  "supabase==2.13.0",
   "tortoise-orm==0.24.0",
 ]
 authors = [{ name = "Pepe", email = "pepe-onche@proton.me" }]
