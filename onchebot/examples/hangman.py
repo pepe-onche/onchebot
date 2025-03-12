@@ -2,7 +2,6 @@ import logging
 import os
 import random
 import unicodedata
-from ast import FormattedValue
 
 import onchebot
 from onchebot.bot import Bot

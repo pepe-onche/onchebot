@@ -59,6 +59,7 @@ class Bot:
         self.params, _ = await BotParams.get_or_create(
             id=self.id, defaults={"state": self.state, "last_consumed_id": -1}
         )
+        self.refresh_state(self.params.state)
 
     def get_module(self, module_type: type[T]) -> T:
         return next(
