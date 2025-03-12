@@ -10,8 +10,8 @@ def create(id: str, user: User, topic_id: int, supabase_url: str, supabase_key: 
 
     tamagonche = onchebot.add_bot(id, user, topic_id, default_state={"count": 0})
 
-    @tamagonche.on_message()
-    async def feed(msg: Message):  # pyright: ignore[reportUnusedFunction]
+    @tamagonche.command("nourrir")
+    async def feed(msg: Message, _):  # pyright: ignore[reportUnusedFunction]
         response = (
             supabase.table("pets")
             .select("*")
