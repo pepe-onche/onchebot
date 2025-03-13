@@ -29,10 +29,6 @@ def create(id: str, user: User, topic_id: int, supabase_url: str, supabase_key: 
         if food_level <= 0 or status == "dead":
             return
 
-        # If food level is full
-        if food_level >= max_food:
-            return
-
         # Add action
         response = (
             supabase.table("actions")
