@@ -8,32 +8,27 @@ from supabase import create_client, Client
 def create(id: str, user: User, topic_id: int, supabase_url: str, supabase_key: str) -> Bot:
     supabase: Client = create_client(supabase_url, supabase_key)
 
-    tamagonche = onchebot.add_bot(id, user, topic_id, default_state={"count": 0})
+    tamagonche = onchebot.add_bot(id, user, topic_id)
 
     @tamagonche.command("nourrir")
     async def feed(msg: Message, _):  # pyright: ignore[reportUnusedFunction]
-        response = (
-            supabase.table("pets")
-            .select("*")
-            .eq("id", 1)
-            .execute()
-        )
-        if len(response.data) <= 0:
-            return
+        try:
+            supabase.table("actions").insert({"type": "feed", "username": msg.username, "pet_id": 1}).execute()
+        except:
+            pass
 
-        status = str(response.data[0]["status"])
-        food_level = int(response.data[0]["food"])
-        max_food = int(response.data[0]["max_food"])
+    @tamagonche.command("nettoyer")
+    async def clean_trash(msg: Message, _):  # pyright: ignore[reportUnusedFunction]
+        try:
+            supabase.table("actions").insert({"type": "clean_trash", "username": msg.username, "pet_id": 1}).execute()
+        except:
+            pass
 
-        # If dead
-        if food_level <= 0 or status == "dead":
-            return
-
-        # Add action
-        response = (
-            supabase.table("actions")
-            .insert({"type": "feed", "username": msg.username, "pet_id": 1})
-            .execute()
-        )
+    @tamagonche.command("doliprane")
+    async def give_medicine(msg: Message, _):  # pyright: ignore[reportUnusedFunction]
+        try:
+            supabase.table("actions").insert({"type": "give_medicine", "username": msg.username, "pet_id": 1}).execute()
+        except:
+            pass
 
     return tamagonche
