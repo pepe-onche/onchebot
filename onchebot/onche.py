@@ -222,6 +222,7 @@ class Onche:
                 end = suffix.find("/")
                 topic = OncheTopic(topic_id, suffix[:end] if end > 0 else suffix, soup)
                 await self._update_topic(topic)
+                self.topics = list(filter(lambda t: t.id != topic_id, self.topics))
                 self.topics.append(topic)
                 if len(self.topics) > TOPICS_CACHE_SIZE:
                     self.topics.pop(0)
