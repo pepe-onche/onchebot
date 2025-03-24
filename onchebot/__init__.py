@@ -5,6 +5,7 @@ import signal
 import sys
 import threading
 from queue import Queue
+from typing import Awaitable, Callable
 
 import logging_loki
 from prometheus_client import start_http_server
@@ -31,7 +32,7 @@ logging.getLogger("apscheduler.executors.default").disabled = True
 logging.getLogger("apscheduler.executors.default").propagate = False
 
 
-async def run():
+async def run(start_fn: Callable[[], Awaitable[None]] | None = None, stop_fn: Callable[[], Awaitable[None]] | None = None):
     if len(g.bots) == 0:
         logger.error("No bots, please add one")
         return
@@ -47,18 +48,26 @@ async def run():
         bot.user = next(user for user in g.users if user.username == bot.user.username)
         await bot.fetch_params()
 
+    if start_fn:
+        await start_fn()
+
     try:
         await asyncio.gather(
             producer.produce(stop_event), consumer.consume(False, stop_event)
         )
     except Exception as e:
         stop_event.set()
+        if stop_fn:
+            await stop_fn()
         raise e
+
+    if stop_fn:
+        await stop_fn()
 
     await Tortoise.close_connections()
 
 
-def start():
+def start(start_fn: Callable[[], Awaitable[None]] | None = None, stop_fn: Callable[[], Awaitable[None]] | None = None):
     global g
 
     if g.config.loki_url:
@@ -85,7 +94,7 @@ def start():
 
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-    loop.run_until_complete(run())
+    loop.run_until_complete(run(start_fn, stop_fn))
     loop.close()
 
     sys.exit(0)
