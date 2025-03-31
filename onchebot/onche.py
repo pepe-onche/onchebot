@@ -146,7 +146,7 @@ class OncheTopic:
 
         dt = parse_datetime(soup)
         if not dt:
-            return None
+            dt = datetime.now(ZoneInfo("Europe/Paris"))
 
         stickers: list[str] = []
         for sticker in content_soup.select("div.sticker"):
