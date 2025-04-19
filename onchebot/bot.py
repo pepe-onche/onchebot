@@ -103,8 +103,13 @@ class Bot:
 
         self.state = {**modules_default_state, **self.default_state, **state}
 
-    def set_state(self, key: str, value: Any):
+    async def set_state(self, key: str, value: Any):
         self.state[key] = value
+        self.refresh_state(self.state)
+        if self.params:
+            self.refresh_state(self.state)
+            self.params.state = self.state
+            await self.params.save()
 
     def get_state(self, key: str | None = None) -> Any:  # pyright: ignore[reportAny]
         if key:

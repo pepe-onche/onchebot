@@ -64,7 +64,7 @@ async def test_hangman(onchebot_setup: None):  # pyright: ignore[reportUnusedPar
     assert khey not in bot.state["points"]
     assert bot.state["word"] != "merde"
 
-    bot.state["word"] = "caca"
+    await bot.set_state("word", "caca")
 
     await test.add_msg("/lettre c", khey)
     await consume_once()
@@ -83,7 +83,7 @@ async def test_hangman(onchebot_setup: None):  # pyright: ignore[reportUnusedPar
     assert "Nouveau mot" in test.posted_msgs[-1].content
     assert khey not in bot.state["points"]
 
-    bot.state["word"] = "arc-en-ciél"
+    await bot.set_state("word", "arc-en-ciél")
 
     await test.add_msg("/lettre é", khey)
     await consume_once()
