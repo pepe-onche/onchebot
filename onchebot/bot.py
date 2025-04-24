@@ -34,6 +34,7 @@ class Bot:
         modules: list[BotModule],
         prefix: str | None,
         msg_time_threshold: int,
+        cf_clearance: str | None,
     ) -> None:
         self.id: str = id
         self.topic_id: int = topic_id
@@ -46,7 +47,7 @@ class Bot:
         self.default_state: dict[str, Any] = default_state if default_state else {}
         self.tasks: list[Job] = []
         self.tasks_created: bool = False
-        self.onche: Onche = Onche(user.username, user.password)
+        self.onche: Onche = Onche(user.username, user.password, cf_clearance)
         self.msg_time_threshold: int = msg_time_threshold
         self.prefix: str | None = prefix
         self.modules: list[BotModule] = modules

@@ -58,6 +58,7 @@ def add_bot(
         default_state=default_state,
         prefix=prefix,
         msg_time_threshold=msg_time_threshold,
+        cf_clearance=g.config.cf_clearance,
     )
     g.bots.append(bot)
     metrics.bot_counter.set(len(g.bots))

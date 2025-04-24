@@ -13,6 +13,7 @@ class Config:
     prometheus_host: str = "localhost"
     prometheus_port: int = 9464
     loki_url: str | None = None
+    cf_clearance: str | None = None
 
 
 class Metric(Model):

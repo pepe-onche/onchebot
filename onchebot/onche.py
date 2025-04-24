@@ -191,10 +191,11 @@ class NotPostedError(Exception):
 
 
 class Onche:
-    def __init__(self, username: str | None = None, password: str | None = None):
+    def __init__(self, username: str | None = None, password: str | None = None, cf_clearance: str | None = None):
         self.username: str | None = username
         self.password: str | None = password
         self.topics: list[OncheTopic] = []
+        self.cf_clearance: str | None = cf_clearance;
         self._cookie: str = ""
 
     @property
@@ -207,8 +208,12 @@ class Onche:
         self.topics = []  # Clear the topics cache whevener the cookie changes
 
     def get_headers(self):
+        items = [self.cookie]
+        if self.cf_clearance:
+            items.append(f"cf_clearance={self.cf_clearance}")
+
         return {
-            "Cookie": self.cookie,
+            "Cookie": "; ".join(items),
         }
 
     async def init_topic(self, topic_id: int) -> OncheTopic:
