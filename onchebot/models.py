@@ -47,6 +47,7 @@ class Message(Model):
         "models.Topic", related_name="messages", null=True, default=-1
     )
     answer_to: Field[int] = IntField(null=True)
+    badges: Field[str] = TextField(null=True)
 
     class Meta:  # pyright: ignore[reportIncompatibleVariableOverride]
         table: str = "onchebot_messages"

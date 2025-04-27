@@ -148,6 +148,18 @@ class OncheTopic:
         if not dt:
             dt = datetime.now(ZoneInfo("Europe/Paris"))
 
+        def parse_badges(soup: Tag) -> list[str]:
+            bd: list[str] = []
+            for img in soup.select("div.message-badges>img"):
+                src = img.attrs.get("src", "")
+                match = re.search(r'/img/badges/(.*)\.png', src)
+                if match:
+                    result = match.group(1)
+                    bd.append(result)
+            return bd
+
+        badges = parse_badges(soup)
+
         stickers: list[str] = []
         for sticker in content_soup.select("div.sticker"):
             name = sticker["data-name"]
@@ -172,6 +184,7 @@ class OncheTopic:
             username=raw_username.get_text(),
             topic_id=int(self.id),
             timestamp=int(dt.timestamp()),
+            badges=",".join(badges) if len(badges) > 0 else None,
         )
 
     def is_logged(self, soup: Tag) -> bool:
